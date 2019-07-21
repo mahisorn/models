@@ -70,24 +70,24 @@ class DataReader(object):
             shuffle=self.shuffle,
             num_epochs=(1 if not self.shuffle else None)
         )
-        seg_paths_queue = tf.train.string_input_producer(
-            self.file_lists['segment_file_list'], seed=seed,
-            shuffle=self.shuffle,
-            num_epochs=(1 if not self.shuffle else None))
+        # seg_paths_queue = tf.train.string_input_producer(
+        #     self.file_lists['segment_file_list'], seed=seed,
+        #     shuffle=self.shuffle,
+        #     num_epochs=(1 if not self.shuffle else None))
         cam_paths_queue = tf.train.string_input_producer(
             self.file_lists['cam_file_list'], seed=seed,
             shuffle=self.shuffle,
             num_epochs=(1 if not self.shuffle else None))
         img_reader = tf.WholeFileReader()
         _, image_contents = img_reader.read(image_paths_queue)
-        seg_reader = tf.WholeFileReader()
-        _, seg_contents = seg_reader.read(seg_paths_queue)
+        #seg_reader = tf.WholeFileReader()
+        #_, seg_contents = seg_reader.read(seg_paths_queue)
         if self.file_extension == 'jpg':
           image_seq = tf.image.decode_jpeg(image_contents)
-          seg_seq = tf.image.decode_jpeg(seg_contents, channels=3)
+          #seg_seq = tf.image.decode_jpeg(seg_contents, channels=3)
         elif self.file_extension == 'png':
           image_seq = tf.image.decode_png(image_contents, channels=3)
-          seg_seq = tf.image.decode_png(seg_contents, channels=3)
+          #seg_seq = tf.image.decode_png(seg_contents, channels=3)
 
       with tf.name_scope('load_intrinsics'):
         cam_reader = tf.TextLineReader()
@@ -107,13 +107,16 @@ class DataReader(object):
           image_seq = self.augment_image_colorspace(image_seq)
 
       image_stack = self.unpack_images(image_seq)
-      seg_stack = self.unpack_images(seg_seq)
+      #seg_stack = self.unpack_images(seg_seq)
 
       if self.flipping_mode != FLIP_NONE:
         random_flipping = (self.flipping_mode == FLIP_RANDOM)
         with tf.name_scope('image_augmentation_flip'):
-          image_stack, seg_stack, intrinsics = self.augment_images_flip(
-              image_stack, seg_stack, intrinsics,
+          #image_stack, seg_stack, intrinsics = self.augment_images_flip(
+          image_stack, intrinsics = self.augment_images_flip(
+              image_stack, 
+              #seg_stack, 
+              intrinsics,
               randomized=random_flipping)
 
       if self.random_scale_crop:
@@ -140,23 +143,33 @@ class DataReader(object):
 
       with tf.name_scope('batching'):
         if self.shuffle:
-          (image_stack, image_stack_norm, seg_stack, intrinsic_mat,
+          (image_stack, image_stack_norm, 
+           #seg_stack, 
+           intrinsic_mat,
            intrinsic_mat_inv) = tf.train.shuffle_batch(
-               [image_stack, image_stack_norm, seg_stack, intrinsic_mat,
+               [image_stack, image_stack_norm, 
+                #seg_stack, 
+                intrinsic_mat,
                 intrinsic_mat_inv],
                batch_size=self.batch_size,
                capacity=QUEUE_SIZE + QUEUE_BUFFER * self.batch_size,
                min_after_dequeue=QUEUE_SIZE)
         else:
-          (image_stack, image_stack_norm, seg_stack, intrinsic_mat,
+          (image_stack, image_stack_norm, 
+           #seg_stack, 
+           intrinsic_mat,
            intrinsic_mat_inv) = tf.train.batch(
-               [image_stack, image_stack_norm, seg_stack, intrinsic_mat,
+               [image_stack, image_stack_norm, 
+                #seg_stack, 
+                intrinsic_mat,
                 intrinsic_mat_inv],
                batch_size=self.batch_size,
                num_threads=1,
                capacity=QUEUE_SIZE + QUEUE_BUFFER * self.batch_size)
         logging.info('image_stack: %s', util.info(image_stack))
-    return (image_stack, image_stack_norm, seg_stack, intrinsic_mat,
+    return (image_stack, image_stack_norm, 
+            #seg_stack, 
+            intrinsic_mat,
             intrinsic_mat_inv)
 
   def unpack_images(self, image_seq):
@@ -216,11 +229,15 @@ class DataReader(object):
     return image_stack_aug
 
   @classmethod
-  def augment_images_flip(cls, image_stack, seg_stack, intrinsics,
+  def augment_images_flip(cls, image_stack, 
+                          #seg_stack, 
+                          intrinsics,
                           randomized=True):
     """Randomly flips the image horizontally."""
 
-    def flip(cls, image_stack, seg_stack, intrinsics):
+    def flip(cls, image_stack, 
+             #seg_stack, 
+             intrinsics):
       _, in_w, _ = image_stack.get_shape().as_list()
       fx = intrinsics[0, 0]
       fy = intrinsics[1, 1]
@@ -228,17 +245,24 @@ class DataReader(object):
       cy = intrinsics[1, 2]
       intrinsics = cls.make_intrinsics_matrix(fx, fy, cx, cy)
       return (tf.image.flip_left_right(image_stack),
-              tf.image.flip_left_right(seg_stack), intrinsics)
+              #tf.image.flip_left_right(seg_stack), 
+              intrinsics)
 
     if randomized:
       prob = tf.random_uniform(shape=[], minval=0.0, maxval=1.0,
                                dtype=tf.float32)
       predicate = tf.less(prob, 0.5)
       return tf.cond(predicate,
-                     lambda: flip(cls, image_stack, seg_stack, intrinsics),
-                     lambda: (image_stack, seg_stack, intrinsics))
+                     lambda: flip(cls, image_stack, 
+                                  #seg_stack, 
+                                  intrinsics),
+                     lambda: (image_stack, 
+                              #seg_stack, 
+                              intrinsics))
     else:
-      return flip(cls, image_stack, seg_stack, intrinsics)
+      return flip(cls, image_stack, 
+                  #seg_stack, 
+                  intrinsics)
 
   @classmethod
   def augment_images_scale_crop(cls, im, seg, intrinsics, out_h, out_w):

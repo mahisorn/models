@@ -174,7 +174,8 @@ class Model(object):
 
   def build_inference_for_training(self):
     """Invokes depth and ego-motion networks and computes clouds if needed."""
-    (self.image_stack, self.image_stack_norm, self.seg_stack,
+    (self.image_stack, self.image_stack_norm, 
+     #self.seg_stack,
      self.intrinsic_mat, self.intrinsic_mat_inv) = self.reader.read_data()
     with tf.variable_scope('depth_prediction'):
       # Organized by ...[i][scale].  Note that the order is flipped in
@@ -218,185 +219,186 @@ class Model(object):
         tf.get_variable_scope().reuse_variables()
 
     if self.handle_motion:
+      print("hi")
       # Define egomotion network. This network can see the whole scene except
       # for any moving objects as indicated by the provided segmentation masks.
       # To avoid the network getting clues of motion by tracking those masks, we
       # define the segmentation masks as the union temporally.
-      with tf.variable_scope('egomotion_prediction'):
-        base_input = self.image_stack_norm  # (B, H, W, 9)
-        seg_input = self.seg_stack  # (B, H, W, 9)
-        ref_zero = tf.constant(0, dtype=tf.uint8)
-        # Motion model is currently defined for three-frame sequences.
-        object_mask1 = tf.equal(seg_input[:, :, :, 0], ref_zero)
-        object_mask2 = tf.equal(seg_input[:, :, :, 3], ref_zero)
-        object_mask3 = tf.equal(seg_input[:, :, :, 6], ref_zero)
-        mask_complete = tf.expand_dims(tf.logical_and(  # (B, H, W, 1)
-            tf.logical_and(object_mask1, object_mask2), object_mask3), axis=3)
-        mask_complete = tf.tile(mask_complete, (1, 1, 1, 9))  # (B, H, W, 9)
-        # Now mask out base_input.
-        self.mask_complete = tf.to_float(mask_complete)
-        self.base_input_masked = base_input * self.mask_complete
-        self.egomotion = nets.egomotion_net(
-            image_stack=self.base_input_masked,
-            disp_bottleneck_stack=None,
-            joint_encoder=False,
-            seq_length=self.seq_length,
-            weight_reg=self.weight_reg)
+      # with tf.variable_scope('egomotion_prediction'):
+      #   base_input = self.image_stack_norm  # (B, H, W, 9)
+      #   seg_input = self.seg_stack  # (B, H, W, 9)
+      #   ref_zero = tf.constant(0, dtype=tf.uint8)
+      #   # Motion model is currently defined for three-frame sequences.
+      #   object_mask1 = tf.equal(seg_input[:, :, :, 0], ref_zero)
+      #   object_mask2 = tf.equal(seg_input[:, :, :, 3], ref_zero)
+      #   object_mask3 = tf.equal(seg_input[:, :, :, 6], ref_zero)
+      #   mask_complete = tf.expand_dims(tf.logical_and(  # (B, H, W, 1)
+      #       tf.logical_and(object_mask1, object_mask2), object_mask3), axis=3)
+      #   mask_complete = tf.tile(mask_complete, (1, 1, 1, 9))  # (B, H, W, 9)
+      #   # Now mask out base_input.
+      #   self.mask_complete = tf.to_float(mask_complete)
+      #   self.base_input_masked = base_input * self.mask_complete
+      #   self.egomotion = nets.egomotion_net(
+      #       image_stack=self.base_input_masked,
+      #       disp_bottleneck_stack=None,
+      #       joint_encoder=False,
+      #       seq_length=self.seq_length,
+      #       weight_reg=self.weight_reg)
 
-      # Define object motion network for refinement. This network only sees
-      # one object at a time over the whole sequence, and tries to estimate its
-      # motion. The sequence of images are the respective warped frames.
+      # # Define object motion network for refinement. This network only sees
+      # # one object at a time over the whole sequence, and tries to estimate its
+      # # motion. The sequence of images are the respective warped frames.
 
-      # For each scale, contains batch_size elements of shape (N, 2, 6).
-      self.object_transforms = {}
-      # For each scale, contains batch_size elements of shape (N, H, W, 9).
-      self.object_masks = {}
-      self.object_masks_warped = {}
-      # For each scale, contains batch_size elements of size N.
-      self.object_ids = {}
+      # # For each scale, contains batch_size elements of shape (N, 2, 6).
+      # self.object_transforms = {}
+      # # For each scale, contains batch_size elements of shape (N, H, W, 9).
+      # self.object_masks = {}
+      # self.object_masks_warped = {}
+      # # For each scale, contains batch_size elements of size N.
+      # self.object_ids = {}
 
-      self.egomotions_seq = {}
-      self.warped_seq = {}
-      self.inputs_objectmotion_net = {}
-      with tf.variable_scope('objectmotion_prediction'):
-        # First, warp raw images according to overall egomotion.
-        for s in range(NUM_SCALES):
-          self.warped_seq[s] = []
-          self.egomotions_seq[s] = []
-          for source_index in range(self.seq_length):
-            egomotion_mat_i_1 = project.get_transform_mat(
-                self.egomotion, source_index, 1)
-            warped_image_i_1, _ = (
-                project.inverse_warp(
-                    self.image_stack[
-                        :, :, :, source_index*3:(source_index+1)*3],
-                    self.depth_upsampled[1][s],
-                    egomotion_mat_i_1,
-                    self.intrinsic_mat[:, 0, :, :],
-                    self.intrinsic_mat_inv[:, 0, :, :]))
+      # self.egomotions_seq = {}
+      # self.warped_seq = {}
+      # self.inputs_objectmotion_net = {}
+      # with tf.variable_scope('objectmotion_prediction'):
+      #   # First, warp raw images according to overall egomotion.
+      #   for s in range(NUM_SCALES):
+      #     self.warped_seq[s] = []
+      #     self.egomotions_seq[s] = []
+      #     for source_index in range(self.seq_length):
+      #       egomotion_mat_i_1 = project.get_transform_mat(
+      #           self.egomotion, source_index, 1)
+      #       warped_image_i_1, _ = (
+      #           project.inverse_warp(
+      #               self.image_stack[
+      #                   :, :, :, source_index*3:(source_index+1)*3],
+      #               self.depth_upsampled[1][s],
+      #               egomotion_mat_i_1,
+      #               self.intrinsic_mat[:, 0, :, :],
+      #               self.intrinsic_mat_inv[:, 0, :, :]))
 
-            self.warped_seq[s].append(warped_image_i_1)
-            self.egomotions_seq[s].append(egomotion_mat_i_1)
+      #       self.warped_seq[s].append(warped_image_i_1)
+      #       self.egomotions_seq[s].append(egomotion_mat_i_1)
 
-          # Second, for every object in the segmentation mask, take its mask and
-          # warp it according to the egomotion estimate. Then put a threshold to
-          # binarize the warped result. Use this mask to mask out background and
-          # other objects, and pass the filtered image to the object motion
-          # network.
-          self.object_transforms[s] = []
-          self.object_masks[s] = []
-          self.object_ids[s] = []
-          self.object_masks_warped[s] = []
-          self.inputs_objectmotion_net[s] = {}
+      #     # Second, for every object in the segmentation mask, take its mask and
+      #     # warp it according to the egomotion estimate. Then put a threshold to
+      #     # binarize the warped result. Use this mask to mask out background and
+      #     # other objects, and pass the filtered image to the object motion
+      #     # network.
+      #     self.object_transforms[s] = []
+      #     self.object_masks[s] = []
+      #     self.object_ids[s] = []
+      #     self.object_masks_warped[s] = []
+      #     self.inputs_objectmotion_net[s] = {}
 
-          for i in range(self.batch_size):
-            seg_sequence = self.seg_stack[i]  # (H, W, 9=3*3)
-            object_ids = tf.unique(tf.reshape(seg_sequence, [-1]))[0]
-            self.object_ids[s].append(object_ids)
-            color_stack = []
-            mask_stack = []
-            mask_stack_warped = []
-            for j in range(self.seq_length):
-              current_image = self.warped_seq[s][j][i]  # (H, W, 3)
-              current_seg = seg_sequence[:, :, j * 3:(j+1) * 3]  # (H, W, 3)
+      #     for i in range(self.batch_size):
+      #       seg_sequence = self.seg_stack[i]  # (H, W, 9=3*3)
+      #       object_ids = tf.unique(tf.reshape(seg_sequence, [-1]))[0]
+      #       self.object_ids[s].append(object_ids)
+      #       color_stack = []
+      #       mask_stack = []
+      #       mask_stack_warped = []
+      #       for j in range(self.seq_length):
+      #         current_image = self.warped_seq[s][j][i]  # (H, W, 3)
+      #         current_seg = seg_sequence[:, :, j * 3:(j+1) * 3]  # (H, W, 3)
 
-              def process_obj_mask_warp(obj_id):
-                """Performs warping of the individual object masks."""
-                obj_mask = tf.to_float(tf.equal(current_seg, obj_id))
-                # Warp obj_mask according to overall egomotion.
-                obj_mask_warped, _ = (
-                    project.inverse_warp(
-                        tf.expand_dims(obj_mask, axis=0),
-                        # Middle frame, highest scale, batch element i:
-                        tf.expand_dims(self.depth_upsampled[1][s][i], axis=0),
-                        # Matrix for warping j into middle frame, batch elem. i:
-                        tf.expand_dims(self.egomotions_seq[s][j][i], axis=0),
-                        tf.expand_dims(self.intrinsic_mat[i, 0, :, :], axis=0),
-                        tf.expand_dims(self.intrinsic_mat_inv[i, 0, :, :],
-                                       axis=0)))
-                obj_mask_warped = tf.squeeze(obj_mask_warped)
-                obj_mask_binarized = tf.greater(  # Threshold to binarize mask.
-                    obj_mask_warped, tf.constant(0.5))
-                return tf.to_float(obj_mask_binarized)
+      #         def process_obj_mask_warp(obj_id):
+      #           """Performs warping of the individual object masks."""
+      #           obj_mask = tf.to_float(tf.equal(current_seg, obj_id))
+      #           # Warp obj_mask according to overall egomotion.
+      #           obj_mask_warped, _ = (
+      #               project.inverse_warp(
+      #                   tf.expand_dims(obj_mask, axis=0),
+      #                   # Middle frame, highest scale, batch element i:
+      #                   tf.expand_dims(self.depth_upsampled[1][s][i], axis=0),
+      #                   # Matrix for warping j into middle frame, batch elem. i:
+      #                   tf.expand_dims(self.egomotions_seq[s][j][i], axis=0),
+      #                   tf.expand_dims(self.intrinsic_mat[i, 0, :, :], axis=0),
+      #                   tf.expand_dims(self.intrinsic_mat_inv[i, 0, :, :],
+      #                                  axis=0)))
+      #           obj_mask_warped = tf.squeeze(obj_mask_warped)
+      #           obj_mask_binarized = tf.greater(  # Threshold to binarize mask.
+      #               obj_mask_warped, tf.constant(0.5))
+      #           return tf.to_float(obj_mask_binarized)
 
-              def process_obj_mask(obj_id):
-                """Returns the individual object masks separately."""
-                return tf.to_float(tf.equal(current_seg, obj_id))
-              object_masks = tf.map_fn(  # (N, H, W, 3)
-                  process_obj_mask, object_ids, dtype=tf.float32)
+      #         def process_obj_mask(obj_id):
+      #           """Returns the individual object masks separately."""
+      #           return tf.to_float(tf.equal(current_seg, obj_id))
+      #         object_masks = tf.map_fn(  # (N, H, W, 3)
+      #             process_obj_mask, object_ids, dtype=tf.float32)
 
-              if self.size_constraint_weight > 0:
-                # The object segmentation masks are all in object_masks.
-                # We need to measure the height of every of them, and get the
-                # approximate distance.
+      #         if self.size_constraint_weight > 0:
+      #           # The object segmentation masks are all in object_masks.
+      #           # We need to measure the height of every of them, and get the
+      #           # approximate distance.
 
-                # self.depth_upsampled of shape (seq_length, scale, B, H, W).
-                depth_pred = self.depth_upsampled[j][s][i]  # (H, W)
-                def get_losses(obj_mask):
-                  """Get motion constraint loss."""
-                  # Find height of segment.
-                  coords = tf.where(tf.greater(  # Shape (num_true, 2=yx)
-                      obj_mask[:, :, 0], tf.constant(0.5, dtype=tf.float32)))
-                  y_max = tf.reduce_max(coords[:, 0])
-                  y_min = tf.reduce_min(coords[:, 0])
-                  seg_height = y_max - y_min
-                  f_y = self.intrinsic_mat[i, 0, 1, 1]
-                  approx_depth = ((f_y * self.global_scale_var) /
-                                  tf.to_float(seg_height))
-                  reference_pred = tf.boolean_mask(
-                      depth_pred, tf.greater(
-                          tf.reshape(obj_mask[:, :, 0],
-                                     (self.img_height, self.img_width, 1)),
-                          tf.constant(0.5, dtype=tf.float32)))
+      #           # self.depth_upsampled of shape (seq_length, scale, B, H, W).
+      #           depth_pred = self.depth_upsampled[j][s][i]  # (H, W)
+      #           def get_losses(obj_mask):
+      #             """Get motion constraint loss."""
+      #             # Find height of segment.
+      #             coords = tf.where(tf.greater(  # Shape (num_true, 2=yx)
+      #                 obj_mask[:, :, 0], tf.constant(0.5, dtype=tf.float32)))
+      #             y_max = tf.reduce_max(coords[:, 0])
+      #             y_min = tf.reduce_min(coords[:, 0])
+      #             seg_height = y_max - y_min
+      #             f_y = self.intrinsic_mat[i, 0, 1, 1]
+      #             approx_depth = ((f_y * self.global_scale_var) /
+      #                             tf.to_float(seg_height))
+      #             reference_pred = tf.boolean_mask(
+      #                 depth_pred, tf.greater(
+      #                     tf.reshape(obj_mask[:, :, 0],
+      #                                (self.img_height, self.img_width, 1)),
+      #                     tf.constant(0.5, dtype=tf.float32)))
 
-                  # Establish loss on approx_depth, a scalar, and
-                  # reference_pred, our dense prediction. Normalize both to
-                  # prevent degenerative depth shrinking.
-                  global_mean_depth_pred = tf.reduce_mean(depth_pred)
-                  reference_pred /= global_mean_depth_pred
-                  approx_depth /= global_mean_depth_pred
-                  spatial_err = tf.abs(reference_pred - approx_depth)
-                  mean_spatial_err = tf.reduce_mean(spatial_err)
-                  return mean_spatial_err
+      #             # Establish loss on approx_depth, a scalar, and
+      #             # reference_pred, our dense prediction. Normalize both to
+      #             # prevent degenerative depth shrinking.
+      #             global_mean_depth_pred = tf.reduce_mean(depth_pred)
+      #             reference_pred /= global_mean_depth_pred
+      #             approx_depth /= global_mean_depth_pred
+      #             spatial_err = tf.abs(reference_pred - approx_depth)
+      #             mean_spatial_err = tf.reduce_mean(spatial_err)
+      #             return mean_spatial_err
 
-                losses = tf.map_fn(
-                    get_losses, object_masks, dtype=tf.float32)
-                self.inf_loss += tf.reduce_mean(losses)
-              object_masks_warped = tf.map_fn(  # (N, H, W, 3)
-                  process_obj_mask_warp, object_ids, dtype=tf.float32)
-              filtered_images = tf.map_fn(
-                  lambda mask: current_image * mask, object_masks_warped,
-                  dtype=tf.float32)  # (N, H, W, 3)
-              color_stack.append(filtered_images)
-              mask_stack.append(object_masks)
-              mask_stack_warped.append(object_masks_warped)
+      #           losses = tf.map_fn(
+      #               get_losses, object_masks, dtype=tf.float32)
+      #           self.inf_loss += tf.reduce_mean(losses)
+      #         object_masks_warped = tf.map_fn(  # (N, H, W, 3)
+      #             process_obj_mask_warp, object_ids, dtype=tf.float32)
+      #         filtered_images = tf.map_fn(
+      #             lambda mask: current_image * mask, object_masks_warped,
+      #             dtype=tf.float32)  # (N, H, W, 3)
+      #         color_stack.append(filtered_images)
+      #         mask_stack.append(object_masks)
+      #         mask_stack_warped.append(object_masks_warped)
 
-            # For this batch-element, if there are N moving objects,
-            # color_stack, mask_stack and mask_stack_warped contain both
-            # seq_length elements of shape (N, H, W, 3).
-            # We can now concatenate them on the last axis, creating a tensor of
-            # (N, H, W, 3*3 = 9), and, assuming N does not get too large so that
-            # we have enough memory, pass them in a single batch to the object
-            # motion network.
-            mask_stack = tf.concat(mask_stack, axis=3)  # (N, H, W, 9)
-            mask_stack_warped = tf.concat(mask_stack_warped, axis=3)
-            color_stack = tf.concat(color_stack, axis=3)  # (N, H, W, 9)
-            all_transforms = nets.objectmotion_net(
-                # We cut the gradient flow here as the object motion gradient
-                # should have no saying in how the egomotion network behaves.
-                # One could try just stopping the gradient for egomotion, but
-                # not for the depth prediction network.
-                image_stack=tf.stop_gradient(color_stack),
-                disp_bottleneck_stack=None,
-                joint_encoder=False,  # Joint encoder not supported.
-                seq_length=self.seq_length,
-                weight_reg=self.weight_reg)
-            # all_transforms of shape (N, 2, 6).
-            self.object_transforms[s].append(all_transforms)
-            self.object_masks[s].append(mask_stack)
-            self.object_masks_warped[s].append(mask_stack_warped)
-            self.inputs_objectmotion_net[s][i] = color_stack
-            tf.get_variable_scope().reuse_variables()
+      #       # For this batch-element, if there are N moving objects,
+      #       # color_stack, mask_stack and mask_stack_warped contain both
+      #       # seq_length elements of shape (N, H, W, 3).
+      #       # We can now concatenate them on the last axis, creating a tensor of
+      #       # (N, H, W, 3*3 = 9), and, assuming N does not get too large so that
+      #       # we have enough memory, pass them in a single batch to the object
+      #       # motion network.
+      #       mask_stack = tf.concat(mask_stack, axis=3)  # (N, H, W, 9)
+      #       mask_stack_warped = tf.concat(mask_stack_warped, axis=3)
+      #       color_stack = tf.concat(color_stack, axis=3)  # (N, H, W, 9)
+      #       all_transforms = nets.objectmotion_net(
+      #           # We cut the gradient flow here as the object motion gradient
+      #           # should have no saying in how the egomotion network behaves.
+      #           # One could try just stopping the gradient for egomotion, but
+      #           # not for the depth prediction network.
+      #           image_stack=tf.stop_gradient(color_stack),
+      #           disp_bottleneck_stack=None,
+      #           joint_encoder=False,  # Joint encoder not supported.
+      #           seq_length=self.seq_length,
+      #           weight_reg=self.weight_reg)
+      #       # all_transforms of shape (N, 2, 6).
+      #       self.object_transforms[s].append(all_transforms)
+      #       self.object_masks[s].append(mask_stack)
+      #       self.object_masks_warped[s].append(mask_stack_warped)
+      #       self.inputs_objectmotion_net[s][i] = color_stack
+      #       tf.get_variable_scope().reuse_variables()
     else:
       # Don't handle motion, classic model formulation.
       with tf.name_scope('egomotion_prediction'):
@@ -492,75 +494,78 @@ class Model(object):
               target_depth = self.depth[j][s]
 
             key = '%d-%d' % (i, j)
+            print("---------------" + key)
 
             if self.handle_motion:
-              # self.seg_stack of shape (B, H, W, 9).
-              # target_depth corresponds to middle frame, of shape (B, H, W, 1).
+              print("hi2")
 
-              # Now incorporate the other warping results, performed according
-              # to the object motion network's predictions.
-              # self.object_masks batch_size elements of (N, H, W, 9).
-              # self.object_masks_warped batch_size elements of (N, H, W, 9).
-              # self.object_transforms batch_size elements of (N, 2, 6).
-              self.all_batches = []
-              for batch_s in range(self.batch_size):
-                # To warp i into j, first take the base warping (this is the
-                # full image i warped into j using only the egomotion estimate).
-                base_warping = self.warped_seq[s][i][batch_s]
-                transform_matrices_thisbatch = tf.map_fn(
-                    lambda transform: project.get_transform_mat(
-                        tf.expand_dims(transform, axis=0), i, j)[0],
-                    self.object_transforms[0][batch_s])
+              # # self.seg_stack of shape (B, H, W, 9).
+              # # target_depth corresponds to middle frame, of shape (B, H, W, 1).
 
-                def inverse_warp_wrapper(matrix):
-                  """Wrapper for inverse warping method."""
-                  warp_image, _ = (
-                      project.inverse_warp(
-                          tf.expand_dims(base_warping, axis=0),
-                          tf.expand_dims(target_depth[batch_s], axis=0),
-                          tf.expand_dims(matrix, axis=0),
-                          tf.expand_dims(self.intrinsic_mat[
-                              batch_s, selected_scale, :, :], axis=0),
-                          tf.expand_dims(self.intrinsic_mat_inv[
-                              batch_s, selected_scale, :, :], axis=0)))
-                  return warp_image
-                warped_images_thisbatch = tf.map_fn(
-                    inverse_warp_wrapper, transform_matrices_thisbatch,
-                    dtype=tf.float32)
-                warped_images_thisbatch = warped_images_thisbatch[:, 0, :, :, :]
-                # warped_images_thisbatch is now of shape (N, H, W, 9).
+              # # Now incorporate the other warping results, performed according
+              # # to the object motion network's predictions.
+              # # self.object_masks batch_size elements of (N, H, W, 9).
+              # # self.object_masks_warped batch_size elements of (N, H, W, 9).
+              # # self.object_transforms batch_size elements of (N, 2, 6).
+              # self.all_batches = []
+              # for batch_s in range(self.batch_size):
+              #   # To warp i into j, first take the base warping (this is the
+              #   # full image i warped into j using only the egomotion estimate).
+              #   base_warping = self.warped_seq[s][i][batch_s]
+              #   transform_matrices_thisbatch = tf.map_fn(
+              #       lambda transform: project.get_transform_mat(
+              #           tf.expand_dims(transform, axis=0), i, j)[0],
+              #       self.object_transforms[0][batch_s])
 
-                # Combine warped frames into a single one, using the object
-                # masks. Result should be (1, 128, 416, 3).
-                # Essentially, we here want to sum them all up, filtered by the
-                # respective object masks.
-                mask_base_valid_source = tf.equal(
-                    self.seg_stack[batch_s, :, :, i*3:(i+1)*3],
-                    tf.constant(0, dtype=tf.uint8))
-                mask_base_valid_target = tf.equal(
-                    self.seg_stack[batch_s, :, :, j*3:(j+1)*3],
-                    tf.constant(0, dtype=tf.uint8))
-                mask_valid = tf.logical_and(
-                    mask_base_valid_source, mask_base_valid_target)
-                self.base_warping = base_warping * tf.to_float(mask_valid)
-                background = tf.expand_dims(self.base_warping, axis=0)
-                def construct_const_filter_tensor(obj_id):
-                  return tf.fill(
-                      dims=[self.img_height, self.img_width, 3],
-                      value=tf.sign(obj_id)) * tf.to_float(
-                          tf.equal(self.seg_stack[batch_s, :, :, 3:6],
-                                   tf.cast(obj_id, dtype=tf.uint8)))
-                filter_tensor = tf.map_fn(
-                    construct_const_filter_tensor,
-                    tf.to_float(self.object_ids[s][batch_s]))
-                filter_tensor = tf.stack(filter_tensor, axis=0)
-                objects_to_add = tf.reduce_sum(
-                    tf.multiply(warped_images_thisbatch, filter_tensor),
-                    axis=0, keepdims=True)
-                combined = background + objects_to_add
-                self.all_batches.append(combined)
-               # Now of shape (B, 128, 416, 3).
-              self.warped_image[s][key] = tf.concat(self.all_batches, axis=0)
+              #   def inverse_warp_wrapper(matrix):
+              #     """Wrapper for inverse warping method."""
+              #     warp_image, _ = (
+              #         project.inverse_warp(
+              #             tf.expand_dims(base_warping, axis=0),
+              #             tf.expand_dims(target_depth[batch_s], axis=0),
+              #             tf.expand_dims(matrix, axis=0),
+              #             tf.expand_dims(self.intrinsic_mat[
+              #                 batch_s, selected_scale, :, :], axis=0),
+              #             tf.expand_dims(self.intrinsic_mat_inv[
+              #                 batch_s, selected_scale, :, :], axis=0)))
+              #     return warp_image
+              #   warped_images_thisbatch = tf.map_fn(
+              #       inverse_warp_wrapper, transform_matrices_thisbatch,
+              #       dtype=tf.float32)
+              #   warped_images_thisbatch = warped_images_thisbatch[:, 0, :, :, :]
+              #   # warped_images_thisbatch is now of shape (N, H, W, 9).
+
+              #   # Combine warped frames into a single one, using the object
+              #   # masks. Result should be (1, 128, 416, 3).
+              #   # Essentially, we here want to sum them all up, filtered by the
+              #   # respective object masks.
+              #   mask_base_valid_source = tf.equal(
+              #       self.seg_stack[batch_s, :, :, i*3:(i+1)*3],
+              #       tf.constant(0, dtype=tf.uint8))
+              #   mask_base_valid_target = tf.equal(
+              #       self.seg_stack[batch_s, :, :, j*3:(j+1)*3],
+              #       tf.constant(0, dtype=tf.uint8))
+              #   mask_valid = tf.logical_and(
+              #       mask_base_valid_source, mask_base_valid_target)
+              #   self.base_warping = base_warping * tf.to_float(mask_valid)
+              #   background = tf.expand_dims(self.base_warping, axis=0)
+              #   def construct_const_filter_tensor(obj_id):
+              #     return tf.fill(
+              #         dims=[self.img_height, self.img_width, 3],
+              #         value=tf.sign(obj_id)) * tf.to_float(
+              #             tf.equal(self.seg_stack[batch_s, :, :, 3:6],
+              #                      tf.cast(obj_id, dtype=tf.uint8)))
+              #   filter_tensor = tf.map_fn(
+              #       construct_const_filter_tensor,
+              #       tf.to_float(self.object_ids[s][batch_s]))
+              #   filter_tensor = tf.stack(filter_tensor, axis=0)
+              #   objects_to_add = tf.reduce_sum(
+              #       tf.multiply(warped_images_thisbatch, filter_tensor),
+              #       axis=0, keepdims=True)
+              #   combined = background + objects_to_add
+              #   self.all_batches.append(combined)
+              #  # Now of shape (B, 128, 416, 3).
+              # self.warped_image[s][key] = tf.concat(self.all_batches, axis=0)
 
             else:
               # Don't handle motion, classic model formulation.
